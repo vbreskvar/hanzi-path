@@ -1,6 +1,6 @@
 /* Hànzì Path service worker: offline app shell + push reminders.
    Bump VERSION whenever app files change so phones pick up the new version. */
-const VERSION = 'hp-2026-10-23a';
+const VERSION = 'hp-2026-10-23b';
 const SHELL = ['./', 'index.html', 'app.js', 'data.js', 'strokes.js', 'cloud.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/badge-96.png'];
 const CDN = /^https:\/\/(www\.gstatic\.com\/firebasejs\/|cdn\.jsdelivr\.net\/npm\/hanzi-writer@|fonts\.(googleapis|gstatic)\.com\/)/;

@@ -258,16 +258,32 @@ function pickVoice() {
   const vs = speechSynthesis.getVoices();
   VOICE = vs.find(v => /zh[-_]CN/i.test(v.lang) && /natural|online|xiaoxiao|yunxi/i.test(v.name)) || vs.find(v => /zh[-_]CN/i.test(v.lang)) || vs.find(v => /^(zh|cmn)/i.test(v.lang)) || null;
 }
-if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = () => { const had = !!VOICE; pickVoice(); if (!had && VOICE && view.tab !== 'session') render(); }; }
+if ('speechSynthesis' in window) { [500, 1500, 4000].forEach(ms => setTimeout(() => { const had = !!VOICE; pickVoice(); if (!had && VOICE && view.tab !== 'session') render(); }, ms)); pickVoice(); speechSynthesis.onvoiceschanged = () => { const had = !!VOICE; pickVoice(); if (!had && VOICE && view.tab !== 'session') render(); }; }
 function say(text, rate) {
   if (!('speechSynthesis' in window)) return;
   try {
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'zh-CN'; if (VOICE) u.voice = VOICE; u.rate = rate || ST.set.rate;
-    speechSynthesis.speak(u);
+    if (!VOICE) pickVoice();
+    const go = () => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN'; if (VOICE) u.voice = VOICE; u.rate = rate || ST.set.rate;
+      speechSynthesis.speak(u);
+    };
+    // iOS Safari drops an utterance spoken right after cancel(), so wait a moment when something is playing
+    if (speechSynthesis.speaking || speechSynthesis.pending) { speechSynthesis.cancel(); setTimeout(go, 80); } else go();
   } catch { /* speech unavailable */ }
 }
+// Phones only allow sound after a tap: on the first touch, unlock Web Audio, speech and the iOS silent-switch audio session
+const SILENT_MP3 = 'data:audio/mpeg;base64,SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYxLjcuMTAwAAAAAAAAAAAAAAD/83DAAAAAAAAAAAAASW5mbwAAAA8AAAAKAAAEywA7Ozs7Ozs7OztRUVFRUVFRUVFRZ2dnZ2dnZ2dnZ319fX19fX19fX2SkpKSkpKSkpKSqKioqKioqKioqL6+vr6+vr6+vr7U1NTU1NTU1NTU6urq6urq6urq6v////////////8AAAAATGF2ZgAAAAAAAAAAAAAAAAAAAAAAJAJAAAAAAAAABMv4D5RuAAAAAAAAAAAAAAAAAP/zQMQAAAADSAAAAABMQU1FMy4xMDBVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NCxFsAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NAxKQAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/80LEowAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/80DEpAAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsSjAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NCxKMAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NAxKQAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/80LEowAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=';
+let AUDIO_UNLOCKED = false;
+function unlockAudio() {
+  if (AUDIO_UNLOCKED) return; AUDIO_UNLOCKED = true;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* not supported */ }
+  try { const a = new Audio(SILENT_MP3); a.setAttribute('playsinline', ''); a.play().catch(() => {}); } catch { /* no media */ }
+  try { const c = actx(); if (c) { const b = c.createBuffer(1, 1, 22050), src = c.createBufferSource(); src.buffer = b; src.connect(c.destination); src.start(0); } } catch { /* no web audio */ }
+  try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'zh-CN'; speechSynthesis.speak(u); pickVoice(); } } catch { /* no speech */ }
+}
+['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, unlockAudio, { capture: true, passive: true }));
+document.addEventListener('visibilitychange', () => { if (!document.hidden && ACTX && ACTX.state !== 'running') { try { ACTX.resume(); } catch { /* ignore */ } } });
 const PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>';
 const playBtn = (text, label = 'Play') => `<button class="play" data-act="say" data-t="${esc(text)}" aria-label="${esc(label)}">${PLAY}</button>`;
 
@@ -295,7 +311,7 @@ let ACTX = null, MASTER = null;
 function actx() {
   try {
     if (!ACTX) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; ACTX = new C(); MASTER = ACTX.createGain(); MASTER.connect(ACTX.destination); }
-    if (ACTX.state === 'suspended') ACTX.resume();
+    if (ACTX.state !== 'running') { try { ACTX.resume(); } catch { /* ignore */ } }
     MASTER.gain.value = ST.set.vol;
     return ACTX;
   } catch { return null; }
