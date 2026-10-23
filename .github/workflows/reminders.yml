@@ -1,0 +1,40 @@
+name: Reminders
+
+on:
+  schedule:
+    - cron: '7 * * * *'   # every hour; the script decides who gets a nudge now
+  workflow_dispatch:
+    inputs:
+      test_email:
+        description: 'Send a test reminder right now to this account (Google email). Leave empty for a normal run.'
+        required: false
+        default: ''
+
+concurrency:
+  group: reminders
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  nudge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install firebase-admin
+        working-directory: .github/scripts
+        run: npm install --no-audit --no-fund
+      - name: Send reminders
+        working-directory: .github/scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TEST_EMAIL: ${{ inputs.test_email }}
+          APP_URL: https://vbreskvar.github.io/hanzi-path/
+        run: node nudge.mjs

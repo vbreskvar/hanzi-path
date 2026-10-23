@@ -1,0 +1,50 @@
+rules_version = '2';
+// Hànzì Path. Paste into Firebase console → Firestore Database → Rules → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isMe(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Private progress: only the owner reads or writes it.
+    match /users/{uid} {
+      allow read, delete: if isMe(uid);
+      allow create, update: if isMe(uid)
+        && request.resource.data.keys().hasOnly(['data', 'updated', 'level', 'v'])
+        && request.resource.data.data is string && request.resource.data.data.size() < 900000;
+    }
+
+    // Push-reminder registration: only the owner; the reminder job uses the admin SDK.
+    match /push/{uid} {
+      allow read, write: if isMe(uid);
+    }
+
+    // Leaderboard: any signed-in user can read; each user writes only their own row.
+    match /leaderboard/{uid} {
+      allow read: if signedIn();
+      allow delete: if isMe(uid);
+      allow create, update: if isMe(uid) && validBoard(request.resource.data);
+    }
+    function validBoard(d) {
+      return d.keys().hasOnly(['name', 'level', 'week', 'wk', 'xp', 'streak', 'words', 'group', 'ts'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 30
+        && d.level in ['hsk1', 'hsk2']
+        && d.week is int && d.week >= 0 && d.week <= 200000
+        && d.xp is int && d.xp >= 0 && d.xp <= 50000000
+        && d.streak is int && d.streak >= 0 && d.streak <= 5000
+        && d.words is int && d.words >= 0 && d.words <= 5000
+        && d.wk is string && d.wk.size() <= 10
+        && d.group is string && d.group.size() <= 12
+        && d.ts == request.time;
+    }
+
+    // Friend groups: anyone signed in can check that a code exists (no listing); the creator owns it.
+    match /groups/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn() && code.matches('^[A-Z0-9]{4,12}$')
+        && request.resource.data.keys().hasOnly(['name', 'owner', 'created'])
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() <= 40;
+      allow update, delete: if signedIn() && resource.data.owner == request.auth.uid;
+    }
+  }
+}
