@@ -1039,12 +1039,16 @@ function boardRowsHTML() {
   return rows.map((r, i) => { const me = r.id === USER.uid;
     return `<div class="board-row ${me ? 'me' : ''}"><span class="mono rk">${i + 1}</span><span class="stack" style="gap:0;min-width:0;flex:1"><b class="nm">${esc(r.name)}${me ? ' (you)' : ''}</b><span class="small muted">${r.level === 'hsk1' ? 'HSK 1' : 'HSK 2'} · ${r.words} words · ${r.streak} day streak</span></span><b class="mono">${val(r)} XP</b></div>`; }).join('');
 }
-async function loadBoard(force) {
+async function loadBoard(force, retry) {
   const g = ST.set.group; if (!CL || !USER || !g) return;
   if (!force && BOARD && BOARD.group === g && Date.now() - BOARD.at < 30000) return;
   postBoard();
   try { const rows = await CL.loadBoard(g); BOARD = { group: g, rows, at: Date.now() }; }
-  catch (e) { BOARD = { group: g, rows: [], at: Date.now(), err: 'Could not load the leaderboard. Check your connection.' }; }
+  catch (e) {
+    // reads are scoped to the group saved on your account; right after joining it may not be saved yet
+    if (!retry) { clearTimeout(pushT); await push(); setTimeout(() => loadBoard(true, true), 1500); return; }
+    BOARD = { group: g, rows: [], at: Date.now(), err: 'Could not load the leaderboard. Check your connection.' };
+  }
   const el = document.getElementById('board'); if (el) el.innerHTML = boardRowsHTML();
 }
 /* ---------- session ---------- */
@@ -1584,7 +1588,7 @@ const ACT = {
     try {
       if (!(await CL.groupExists(code))) { toast(`No group called ${code}. Check the code.`); b.disabled = false; return; }
       ST.set.group = code; setChanged(); try { localStorage.removeItem('hanzipath.group'); } catch { /* storage blocked */ }
-      BOARD = null; lastBoard = 0; postBoard(); toast(`Joined group ${code}`); render();
+      clearTimeout(pushT); await push(); BOARD = null; lastBoard = 0; postBoard(); toast(`Joined group ${code}`); render();
     } catch { toast('Could not join right now. Check your connection.'); b.disabled = false; }
   },
   gcreate: async b => {
@@ -1593,7 +1597,7 @@ const ACT = {
       let code = '';
       for (let i = 0; i < 5 && !code; i++) { const c = Array.from({ length: 6 }, () => GROUP_ABC[rnd(GROUP_ABC.length)]).join(''); if (!(await CL.groupExists(c))) code = c; }
       await CL.createGroup(code, `${ST.set.name || 'My'}'s group`);
-      ST.set.group = code; setChanged(); BOARD = null; lastBoard = 0; postBoard(); toast(`Group ${code} created`); render();
+      ST.set.group = code; setChanged(); clearTimeout(pushT); await push(); BOARD = null; lastBoard = 0; postBoard(); toast(`Group ${code} created`); render();
     } catch { toast('Could not create the group. Try again.'); b.disabled = false; }
   },
   gshare: async () => {
@@ -1602,7 +1606,7 @@ const ACT = {
     copyText(url);
   },
   gcopy: () => copyText(shareLink()),
-  gleave: () => { ST.set.group = ''; setChanged(); BOARD = null; lastBoard = 0; postBoard(); render(); }
+  gleave: async () => { ST.set.group = ''; setChanged(); clearTimeout(pushT); await push(); BOARD = null; lastBoard = 0; postBoard(); render(); }
 };
 app.addEventListener('click', e => {
   if (Date.now() - SUPPRESS < 350 && e.target.closest('.tilebtn')) { e.preventDefault(); return; }

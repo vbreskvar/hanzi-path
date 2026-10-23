@@ -56,7 +56,7 @@ const HPC = {
   async saveProgress(st) {
     const u = me(); if (!u) return;
     lastWritten = st.updated || Date.now();
-    await setDoc(doc(db, 'users', u.uid), { data: JSON.stringify(st), updated: lastWritten, level: st.set && st.set.level || '', v: 1 });
+    await setDoc(doc(db, 'users', u.uid), { data: JSON.stringify(st), updated: lastWritten, level: st.set && st.set.level || '', group: st.set && st.set.group || '', v: 1 });
   },
   watchProgress(cb, onErr) {
     return onSnapshot(doc(db, 'users', me().uid), s => {

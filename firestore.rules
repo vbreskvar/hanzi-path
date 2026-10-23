@@ -9,8 +9,9 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, delete: if isMe(uid);
       allow create, update: if isMe(uid)
-        && request.resource.data.keys().hasOnly(['data', 'updated', 'level', 'v'])
-        && request.resource.data.data is string && request.resource.data.data.size() < 900000;
+        && request.resource.data.keys().hasOnly(['data', 'updated', 'level', 'group', 'v'])
+        && request.resource.data.data is string && request.resource.data.data.size() < 900000
+        && (!('group' in request.resource.data) || (request.resource.data.group is string && request.resource.data.group.size() <= 12));
     }
 
     // Push-reminder registration: only the owner; the reminder job uses the admin SDK.
@@ -18,9 +19,11 @@ service cloud.firestore {
       allow read, write: if isMe(uid);
     }
 
-    // Leaderboard: any signed-in user can read; each user writes only their own row.
+    // Leaderboard: you see your own row, and the rows of the group stored on your own users/{uid} doc.
     match /leaderboard/{uid} {
-      allow read: if signedIn();
+      allow get: if isMe(uid);
+      allow list: if signedIn() && resource.data.group != ''
+        && resource.data.group == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.group;
       allow delete: if isMe(uid);
       allow create, update: if isMe(uid) && validBoard(request.resource.data);
     }
