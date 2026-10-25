@@ -1081,7 +1081,7 @@ function renderSession() {
   const pct = SESS.i / SESS.q.length * 100;
   const body = EX[ex.t].html(ex);
   app.innerHTML = `<main class="wrap stack" style="padding-top:14px">
-    <div class="sess-top"><button class="iconbtn" data-act="quit" aria-label="End session">✕</button><div class="bar" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div><span class="combo" id="combo"></span><span class="mono small">${SESS.i + 1}/${SESS.q.length}</span></div>
+    <div class="sess-top"><button class="iconbtn" data-act="quit" aria-label="Exit this session">✕ Exit</button><div class="bar" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div><span class="combo" id="combo"></span><span class="mono small">${SESS.i + 1}/${SESS.q.length}</span></div>
     <section class="q" id="q"><p class="label kind">${kindLabel(ex) + (ex.retry ? ' · again' : '')}</p>${body}<div id="fb"></div></section></main>
     <div class="foot"><div class="wrap"><button class="btn primary big" id="go" data-act="go">${ex.t === 'intro' ? 'Got it' : EX[ex.t].check ? 'Check' : 'Skip'}</button></div></div>`;
   paintCombo();
@@ -1152,6 +1152,16 @@ function next() {
   SESS.i++;
   if (SESS.i >= SESS.q.length) return finish();
   renderSession();
+}
+// Leave mid-session: answers so far are already saved; skip the results screen
+function exitSession() {
+  if (SESS && SESS.n) {
+    logAdd(3, Math.min(Math.round((Date.now() - SESS.start) / 1000), 3600));
+    earnFreeze(); checkBadges(); lastBoard = 0; changed(); clearTimeout(pushT); push();
+  }
+  try { speechSynthesis.cancel(); } catch { /* no speech */ }
+  const back = view.back && view.back.tab !== 'session' && view.back.tab !== 'done' ? view.back : { tab: 'today' };
+  SESS = null; view = back; render(); window.scrollTo(0, 0);
 }
 function finish() {
   const secs = Math.round((Date.now() - SESS.start) / 1000);
@@ -1539,7 +1549,18 @@ const ACT = {
     t.lines.forEach(l => { const u = new SpeechSynthesisUtterance(l[1]); u.lang = 'zh-CN'; if (VOICE) u.voice = VOICE; u.rate = ST.set.rate; speechSynthesis.speak(u); });
   },
   go: () => next(),
-  quit: () => { if (SESS && SESS.n) finish(); else { view = view.back || { tab: 'today' }; SESS = null; render(); } },
+  quit: () => {
+    if (!SESS) return;
+    if (!SESS.n) { exitSession(); return; }
+    const old = document.getElementById('quitbar'); if (old) { old.remove(); return; }
+    const el = document.createElement('div'); el.id = 'quitbar'; el.className = 'card row between'; el.setAttribute('role', 'alertdialog');
+    el.style.cssText = 'gap:10px;padding:12px 14px;border-color:var(--accent)';
+    el.innerHTML = `<span class="small" style="min-width:0;flex:1">Leave now? Your ${SESS.n} answer${SESS.n === 1 ? ' is' : 's are'} already saved.</span>
+      <span class="row" style="gap:8px"><button class="btn" data-act="quitno">Keep going</button><button class="btn primary" data-act="quityes">Exit</button></span>`;
+    document.querySelector('.sess-top').after(el); el.querySelector('[data-act="quityes"]').focus();
+  },
+  quityes: () => exitSession(),
+  quitno: () => { const el = document.getElementById('quitbar'); if (el) el.remove(); },
   home: () => { SESS = null; view = { tab: 'today' }; render(); window.scrollTo(0, 0); },
   opt: b => { const ex = cur(); if (!ex || ex.ui.done || !EX[ex.t].pick) return; const i = +b.dataset.i; ex.ui.given = ex.opts ? (ex.opts[i]?.en || ex.opts[i]?.hz || ex.opts[i]) : b.textContent; EX[ex.t].pick(ex, i); },
   peek: b => { const ex = cur(); b.outerHTML = `<div class="py" style="font-size:1.2rem;font-weight:600">${pyHTML(ex.w.py)}</div>`; },
@@ -1631,7 +1652,7 @@ app.addEventListener('change', e => {
   if (k === 'vol' || k === 'sound') SFX.ok(3);
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closePop(); return; }
+  if (e.key === 'Escape') { if (popEl) { closePop(); return; } if (view.tab === 'session' && SESS && !document.querySelector('.modal')) { e.preventDefault(); ACT.quit(); } return; }
   if (e.target.id === 'g-code' && e.key === 'Enter') { e.preventDefault(); const b = document.querySelector('[data-act="gjoin"]'); if (b) ACT.gjoin(b); return; }
   if (view.tab !== 'session' || !SESS) return;
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
